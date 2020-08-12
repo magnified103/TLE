@@ -115,3 +115,5 @@ pip-wheel-metadata/
 
 # logs
 /logs
+
+myrun.sh
