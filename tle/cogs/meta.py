@@ -52,7 +52,7 @@ class Meta(commands.Cog):
         await ctx.send_help(ctx.command)
 
     @meta.command(brief='Restarts TLE')
-    @commands.has_role('Admin')
+    @commands.has_any_role('Admin', 'Moderator')
     async def restart(self, ctx):
         """Restarts the bot."""
         # Really, we just exit with a special code
@@ -61,7 +61,7 @@ class Meta(commands.Cog):
         os._exit(RESTART)
 
     @meta.command(brief='Kill TLE')
-    @commands.has_role('Admin')
+    @commands.has_any_role('Admin', 'Moderator')
     async def kill(self, ctx):
         """Restarts the bot."""
         await ctx.send('Dying...')
@@ -89,7 +89,7 @@ class Meta(commands.Cog):
                        pretty_time_format(time.time() - self.start_time))
 
     @meta.command(brief='Print bot guilds')
-    @commands.has_role('Admin')
+    @commands.has_any_role('Admin', 'Moderator')
     async def guilds(self, ctx):
         "Replies with info on the bot's guilds"
         msg = [f'Guild ID: {guild.id} | Name: {guild.name} | Owner: {guild.owner.id} | Icon: {guild.icon_url}'
