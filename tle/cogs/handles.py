@@ -344,10 +344,11 @@ class Handles(commands.Cog):
         else:
             roles = [role for role in ctx.guild.roles if role.name == user.rank.title]
             if not roles:
-                raise HandleCogError(f'Role for rank `{user.rank.title}` not present in the server')
-            role_to_assign = roles[0]
-        await self.update_member_rank_role(member, role_to_assign,
-                                           reason='New handle set for user')
+                pass
+                # raise HandleCogError(f'Role for rank `{user.rank.title}` not present in the server')
+            # role_to_assign = roles[0]
+        # await self.update_member_rank_role(member, role_to_assign,
+                                           # reason='New handle set for user')
         embed = _make_profile_embed(member, user, mode='set')
         await ctx.send(embed=embed)
 
@@ -410,7 +411,7 @@ class Handles(commands.Cog):
         rc = cf_common.user_db.remove_handle(member.id, ctx.guild.id)
         if not rc:
             raise HandleCogError(f'Handle for {member.mention} not found in database')
-        await self.update_member_rank_role(member, role_to_assign=None,
+        # await self.update_member_rank_role(member, role_to_assign=None,
                                            reason='Handle removed for user')
         embed = discord_common.embed_success(f'Removed handle for {member.mention}')
         await ctx.send(embed=embed)
@@ -526,6 +527,7 @@ class Handles(commands.Cog):
         for user in users:
             cf_common.user_db.cache_cf_user(user)
 
+        '''
         required_roles = {user.rank.title for user in users if user.rank != cf.UNRATED_RANK}
         rank2role = {role.name: role for role in guild.roles if role.name in required_roles}
         missing_roles = required_roles - rank2role.keys()
@@ -538,6 +540,7 @@ class Handles(commands.Cog):
             role_to_assign = None if user.rank == cf.UNRATED_RANK else rank2role[user.rank.title]
             await self.update_member_rank_role(member, role_to_assign,
                                                reason='Codeforces rank update')
+        '''
 
     @staticmethod
     def _make_rankup_embed(guild, contest, change_by_handle):
