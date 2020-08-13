@@ -122,7 +122,7 @@ class Dueling(commands.Cog):
         lowest_rating = min(user.rating for user in users)
         suggested_rating = max(round(lowest_rating, -2) + _DUEL_RATING_DELTA, 500)
         rating = round(rating, -2) if rating else suggested_rating
-        unofficial = False # rating > suggested_rating
+        unofficial = rating > suggested_rating
         dtype = DuelType.UNOFFICIAL if unofficial else DuelType.OFFICIAL
 
         solved = {sub.problem.name for subs in submissions for sub in subs if sub.verdict != 'COMPILATION_ERROR'}
