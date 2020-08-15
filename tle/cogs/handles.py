@@ -234,6 +234,29 @@ def _make_pages(users, title):
         t += table.Header('#', 'Name', 'Handle', 'Rating')
         t += table.Line()
         for i, (member, handle, rating) in enumerate(chunk):
+            name = member.display_name
+            if len(name) > _NAME_MAX_LEN:
+                name = name[:_NAME_MAX_LEN - 1] + '…'
+            rank = cf.rating2rank(rating)
+            rating_str = 'N/A' if rating is None else str(rating)
+            t += table.Data(i + done, name, handle, f'{rating_str} ({rank.title_abbr})')
+        table_str = '```\n'+str(t)+'\n```'
+        embed = discord_common.cf_color_embed(description=table_str)
+        pages.append((title, embed))
+        done += len(chunk)
+    return pages
+
+def _make_pages_gudgitters(users, title):
+    chunks = paginator.chunkify(users, _HANDLES_PER_PAGE)
+    pages = []
+    done = 0
+
+    style = table.Style('{:>}  {:<}  {:<}  {:<}')
+    for chunk in chunks:
+        t = table.Table(style)
+        t += table.Header('#', 'Name', 'Handle', 'Rating')
+        t += table.Line()
+        for i, (member, handle, rating) in enumerate(chunk):
             name = member
             if len(name) > _NAME_MAX_LEN:
                 name = name[:_NAME_MAX_LEN - 1] + '…'
@@ -425,13 +448,17 @@ class Handles(commands.Cog):
             if score > 0:
                 handle = cf_common.user_db.get_handle(user_id, ctx.guild.id)
                 user = cf_common.user_db.fetch_cf_user(handle)
-                handle_display = f'{member.display_name} ({score})'
-                rating = user.rating
-                rankings.append((handle_display, handle, rating))
+                print(user_id)
+                print(handle)
+                print(user)
+                if user is not None:
+                    handle_display = f'{member.display_name} ({score})'
+                    rating = user.rating
+                    rankings.append((handle_display, handle, rating))
 
         if not rankings:
             raise HandleCogError('No one has completed a gitgud challenge, send ;gitgud to request and ;gotgud to mark it as complete')
-        pages = _make_pages(rankings, 'gudgitters')
+        pages = _make_pages_gudgitters(rankings, 'gudgitters')
         paginator.paginate(self.bot, ctx.channel, pages, wait_time=_PAGINATE_WAIT_TIME,
                            set_pagenum_footers=True)
 
