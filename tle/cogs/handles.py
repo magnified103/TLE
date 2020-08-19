@@ -262,7 +262,7 @@ def _make_pages_gudgitters(users, title):
                 name = name[:_NAME_MAX_LEN - 1] + '…'
             rank = cf.rating2rank(rating)
             rating_str = 'N/A' if rating is None else str(rating)
-            t += table.Data(i + done, name, handle, f'{rating_str} ({rank.title_abbr})')
+            t += table.Data(i + done, name, handle, f'{rating_str}')
         table_str = '```\n'+str(t)+'\n```'
         embed = discord_common.cf_color_embed(description=table_str)
         pages.append((title, embed))
@@ -448,9 +448,6 @@ class Handles(commands.Cog):
             if score > 0:
                 handle = cf_common.user_db.get_handle(user_id, ctx.guild.id)
                 user = cf_common.user_db.fetch_cf_user(handle)
-                print(user_id)
-                print(handle)
-                print(user)
                 if user is not None:
                     handle_display = f'{member.display_name} ({score})'
                     rating = user.rating
