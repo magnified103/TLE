@@ -6,6 +6,7 @@ import textwrap
 
 from discord.ext import commands
 from tle.util.codeforces_common import pretty_time_format
+from tle.util import codeforces_common as cf_common
 
 RESTART = 42
 
@@ -96,6 +97,11 @@ class Meta(commands.Cog):
                 for guild in self.bot.guilds]
         await ctx.send('```' + '\n'.join(msg) + '```')
 
+    @meta.command(brief='Rollback errors in database')
+    async def rollback(self, ctx):
+        """Rollbacks any errors made in database (only use if necessary when commands stop working)"""
+        cf_common.user_db.rollback()
+        await ctx.send('Rollbacked changes.')
 
 def setup(bot):
     bot.add_cog(Meta(bot))
