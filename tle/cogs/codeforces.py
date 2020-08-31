@@ -31,7 +31,7 @@ class Codeforces(commands.Cog):
         self.converter = commands.MemberConverter()
 
     @commands.command(brief='update status, mark guild members as active')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role('Admin')
     async def _updatestatus(self, ctx):
         active_ids = [m.id for m in ctx.guild.members]
         rc = cf_common.user_db.update_status(active_ids)
