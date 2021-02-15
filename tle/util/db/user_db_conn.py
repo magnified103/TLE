@@ -97,6 +97,7 @@ class UserDbConn:
             'organization        TEXT,'
             'contribution        INTEGER,'
             'rating              INTEGER,'
+            'maxRating           INTEGER,'
             'last_online_time    INTEGER,'
             'registration_time   INTEGER,'
             'friend_of_count     INTEGER,'
@@ -420,8 +421,8 @@ class UserDbConn:
     def cache_cf_user(self, user):
         query = ('INSERT INTO cf_user_cache '
                  '(handle, first_name, last_name, country, city, organization, contribution, '
-                 '    rating, last_online_time, registration_time, friend_of_count, title_photo) '
-                 'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) '
+                 '    rating, maxRating, last_online_time, registration_time, friend_of_count, title_photo) '
+                 'VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) '
                  'ON CONFLICT (handle) '
                  'DO UPDATE SET '
                  'first_name = EXCLUDED.first_name,'
@@ -431,6 +432,7 @@ class UserDbConn:
                  'organization = EXCLUDED.organization,'
                  'contribution = EXCLUDED.contribution,'
                  'rating = EXCLUDED.rating,'
+                 'maxRating = EXCLUDED.maxRating,'
                  'last_online_time = EXCLUDED.last_online_time,'
                  'registration_time = EXCLUDED.registration_time,'
                  'friend_of_count = EXCLUDED.friend_of_count,'
@@ -443,9 +445,9 @@ class UserDbConn:
 
     def fetch_cf_user(self, handle):
         query = ('SELECT handle, first_name, last_name, country, city, organization, contribution, '
-                 '    rating, last_online_time, registration_time, friend_of_count, title_photo '
+                 '    rating, maxRating, last_online_time, registration_time, friend_of_count, title_photo '
                  'FROM cf_user_cache '
-                 'WHERE handle = %s;')
+                 'WHERE UPPER(handle) = UPPER(%s);')
         cur = self.conn.cursor()
         cur.execute(query, (handle,))
         user = cur.fetchone()
@@ -494,7 +496,7 @@ class UserDbConn:
     def get_user_id(self, handle, guild_id):
         query = ('SELECT user_id '
                  'FROM user_handle '
-                 'WHERE handle = %s AND guild_id = CAST(%s AS TEXT) AND active = 1;')
+                 'WHERE UPPER(handle) = UPPER(%s) AND guild_id = CAST(%s AS TEXT) AND active = 1;')
         cur = self.conn.cursor()
         cur.execute(query, (handle, guild_id))
         res = cur.fetchone()
@@ -519,7 +521,7 @@ class UserDbConn:
 
     def get_cf_users_for_guild(self, guild_id):
         query = ('SELECT u.user_id, c.handle, c.first_name, c.last_name, c.country, c.city, '
-                 '    c.organization, c.contribution, c.rating, c.last_online_time, '
+                 '    c.organization, c.contribution, c.rating, c.maxRating, c.last_online_time, '
                  '    c.registration_time, c.friend_of_count, c.title_photo '
                  'FROM user_handle AS u '
                  'LEFT JOIN cf_user_cache AS c '
@@ -886,10 +888,10 @@ class UserDbConn:
         cur.execute(query)
         return cur.fetchall()
 
-    def get_complete_duels(self):
+    def get_complete_official_duels(self):
         query = f'''
             SELECT challenger, challengee, winner, finish_time FROM duel WHERE status={Duel.COMPLETE}
-            ORDER BY finish_time ASC;
+            AND type={DuelType.OFFICIAL} ORDER BY finish_time ASC;
         '''
         cur = self.conn.cursor()
         cur.execute(query)
@@ -949,23 +951,27 @@ class UserDbConn:
         cur.execute(query, (guild_id,))
         return cur.fetchone() is not None
 
-    def update_status(self, active_ids: list):
-        # TODO: Deal with the whole status thing.
-        if not active_ids: return 0
-        placeholders = ', '.join(['CAST(%s AS TEXT)'] * len(active_ids))
+    def reset_status(self, id):
         inactive_query = '''
             UPDATE user_handle
             SET active = 0
-            WHERE user_id NOT IN ({});
-        '''.format(placeholders)
+            WHERE guild_id = CAST(%s AS TEXT)
+        '''
+        cur = self.conn.cursor()
+        cur.execute(inactive_query, (id,))
+        self.conn.commit()
+
+    def update_status(self, guild_id: str, active_ids: list):
+        placeholders = ', '.join(['CAST(%s AS TEXT)'] * len(active_ids))
+        if not active_ids: return 0
         active_query = '''
             UPDATE user_handle
             SET active = 1
-            WHERE user_id IN ({});
+            WHERE user_id IN ({})
+            AND guild_id = CAST(%s AS TEXT)
         '''.format(placeholders)
         cur = self.conn.cursor()
-        cur.execute(inactive_query, active_ids)
-        cur.execute(active_query, active_ids)
+        cur.execute(active_query, (*active_ids, guild_id))
         rc = cur.rowcount
         self.conn.commit()
         return rc
