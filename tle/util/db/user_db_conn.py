@@ -721,7 +721,7 @@ class UserDbConn:
 
     def start_duel(self, duelid, start_time):
         query = f'''
-            UPDATE duel SET start_time = %s, status = {Duel.ONGOING};
+            UPDATE duel SET start_time = %s, status = {Duel.ONGOING}
             WHERE id = %s AND status = {Duel.PENDING};
         '''
         cur = self.conn.cursor()
