@@ -220,15 +220,15 @@ class UserDbConn:
 
         # set current id for serial columns
         cur.execute('''
-            SELECT setval(pg_get_serial_sequence('duel', 'id'), (SELECT MAX(id) FROM duel) + 1);
+            SELECT setval(pg_get_serial_sequence('duel', 'id'), (SELECT COALESCE(MAX(id), 0) FROM duel) + 1);
         ''')
 
         cur.execute('''
-            SELECT setval(pg_get_serial_sequence('challenge', 'id'), (SELECT MAX(id) FROM challenge) + 1);
+            SELECT setval(pg_get_serial_sequence('challenge', 'id'), (SELECT COALESCE(MAX(id), 0) FROM challenge) + 1);
         ''')
 
         cur.execute('''
-            SELECT setval(pg_get_serial_sequence('rated_vcs', 'id'), (SELECT MAX(id) FROM rated_vcs) + 1);
+            SELECT setval(pg_get_serial_sequence('rated_vcs', 'id'), (SELECT COALESCE(MAX(id), 0) FROM rated_vcs) + 1);
         ''')
 
         self.conn.commit()
