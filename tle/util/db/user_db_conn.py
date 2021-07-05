@@ -993,7 +993,6 @@ class UserDbConn:
             cur.execute(query, (contest_id, start_time, finish_time, RatedVC.ONGOING, guild_id))
             id = cur.fetchone()[0]
             cur.execute('SELECT * FROM rated_vcs;')
-            print('result', cur.fetchall())
             for user_id in user_ids:
                 query = ('INSERT INTO rated_vc_users '
                          '(vc_id, user_id) '
