@@ -685,11 +685,13 @@ class UserDbConn:
 
     def create_duel(self, challenger, challengee, issue_time, prob, dtype):
         query = f'''
-            INSERT INTO duel (challenger, challengee, issue_time, problem_name, contest_id, p_index, status, type) VALUES (%s, %s, %s, %s, %s, %s, {Duel.PENDING}, %s);
+            INSERT INTO duel (challenger, challengee, issue_time, problem_name, contest_id, p_index, status, type) 
+            VALUES (%s, %s, %s, %s, %s, %s, {Duel.PENDING}, %s)
+            RETURNING id;
         '''
         cur = self.conn.cursor()
         cur.execute(query, (challenger, challengee, issue_time, prob.name, prob.contestId, prob.index, dtype))
-        duelid = cur.lastrowid
+        duelid = cur.fetchone()[0]
         self.conn.commit()
         return duelid
 
@@ -983,12 +985,15 @@ class UserDbConn:
         """
         query = ('INSERT INTO rated_vcs '
                  '(contest_id, start_time, finish_time, status, guild_id) '
-                 'VALUES ( %s, %s, %s, %s, %s);')
+                 'VALUES ( %s, %s, %s, %s, %s)'
+                 'RETURNING id')
         id = None
         with self.conn:
             cur = self.conn.cursor()
             cur.execute(query, (contest_id, start_time, finish_time, RatedVC.ONGOING, guild_id))
-            id = cur.lastrowid
+            id = cur.fetchone()[0]
+            cur.execute('SELECT * FROM rated_vcs;')
+            print('result', cur.fetchall())
             for user_id in user_ids:
                 query = ('INSERT INTO rated_vc_users '
                          '(vc_id, user_id) '
@@ -1080,7 +1085,7 @@ class UserDbConn:
                  'FROM rated_vc_settings '
                  'WHERE guild_id = %s;')
         cur = self.conn.cursor()
-        cur.execute(query, (guild_id,)).fetchone()
+        cur.execute(query, (guild_id,))
         channel_id = cur.fetchone()
         return int(channel_id[0]) if channel_id else None
 
