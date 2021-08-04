@@ -1047,11 +1047,13 @@ class UserDbConn:
             cur.execute(query, (vc_id, user_id, rating))
 
     def get_vc_rating(self, user_id: str, default_if_not_exist: bool = True):
-        query = ('SELECT MAX(vc_id) AS latest_vc_id, rating '
-                 'FROM rated_vc_users '
-                 'WHERE user_id = %s AND rating IS NOT NULL;'
+        query = ('SELECT rating FROM rated_vc_users '
+                 'WHERE user_id = %s AND rating IS NOT NULL '
+                 'ORDER BY vc_id DESC '
+                 'LIMIT 1'
                  )
-        rating = self._fetchone(query, params=(user_id, ), cursor_factory=psycopg2.extras.NamedTupleCursor).rating
+        result = self._fetchone(query, params=(user_id, ), cursor_factory=psycopg2.extras.NamedTupleCursor)
+        rating = result.rating if result is not None else None
         if rating is None:
             if default_if_not_exist:
                 return _DEFAULT_VC_RATING
@@ -1089,9 +1091,10 @@ class UserDbConn:
         return int(channel_id[0]) if channel_id else None
 
     def remove_last_ratedvc_participation(self, user_id: str):
-        query = ('SELECT MAX(vc_id) AS vc_id '
-                 'FROM rated_vc_users '
-                 'WHERE user_id = %s;'
+        query = ('SELECT vc_id FROM rated_vc_users '
+                 'WHERE user_id = %s '
+                 'ORDER BY vc_id DESC '
+                 'LIMIT 1'
                  )
         vc_id = self._fetchone(query, params=(user_id, ), cursor_factory=psycopg2.extras.NamedTupleCursor).vc_id
         query = ('DELETE FROM rated_vc_users '
