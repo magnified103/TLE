@@ -3,7 +3,6 @@ import logging
 import time
 import functools
 from collections import namedtuple, deque
-from tle.util.paginator import chunkify
 
 import aiohttp
 
@@ -17,7 +16,6 @@ PROFILE_BASE_URL = 'https://codeforces.com/profile/'
 ACMSGURU_BASE_URL = 'https://codeforces.com/problemsets/acmsguru/'
 GYM_ID_THRESHOLD = 100000
 DEFAULT_RATING = 1500
-MAX_HANDLES_PER_QUERY = 300 # To avoid sending too large requests.
 
 logger = logging.getLogger(__name__)
 
@@ -243,13 +241,13 @@ def cf_ratelimit(f):
 
 
 @cf_ratelimit
-async def _query_api(path, params=None):
+async def _query_api(path, data=None):
     url = API_BASE_URL + path
     try:
-        logger.info(f'Querying CF API at {url} with {params}')
+        logger.info(f'Querying CF API at {url} with {data}')
         # Explicitly state encoding (though aiohttp accepts gzip by default)
         headers = {'Accept-Encoding': 'gzip'}
-        async with _session.get(url, params=params, headers=headers) as resp:
+        async with _session.post(url, data=data, headers=headers) as resp:
             try:
                 respjson = await resp.json()
             except aiohttp.ContentTypeError:
@@ -335,11 +333,29 @@ class problemset:
                         resp['problemStatistics']]
         return problems, problemstats
 
+def user_info_chunkify(handles):
+    """
+    Querying user.info using POST requests is limited to 10000 handles or 2**16
+    bytes, so requests might need to be split into chunks
+    """
+    SIZE_LIMIT = 2**16
+    HANDLE_LIMIT = 10000
+    chunk = []
+    size = 0
+    for handle in handles:
+        if size + len(handle) > SIZE_LIMIT or len(chunk) == HANDLE_LIMIT:
+            yield chunk
+            chunk = []
+            size = 0
+        chunk.append(handle)
+        size += len(handle) + 1
+    if chunk:
+        yield chunk
 
 class user:
     @staticmethod
     async def info(*, handles):
-        chunks = chunkify(handles, MAX_HANDLES_PER_QUERY)
+        chunks = list(user_info_chunkify(handles))
         if len(chunks) > 1:
             logger.warning(f'cf.info request with {len(handles)} handles,'
             f'will be chunkified into {len(chunks)} requests.')
@@ -376,7 +392,7 @@ class user:
         params = {}
         if activeOnly is not None:
             params['activeOnly'] = _bool_to_str(activeOnly)
-        resp = await _query_api('user.ratedList', params=params)
+        resp = await _query_api('user.ratedList', params)
         return [make_from_dict(User, user_dict) for user_dict in resp]
 
     @staticmethod
@@ -401,7 +417,28 @@ class user:
             submission['author'] = make_from_dict(Party, submission['author'])
         return [make_from_dict(Submission, submission_dict) for submission_dict in resp]
 
-async def resolve_redirect(handle):
+
+async def _needs_fixing(handles):
+    to_fix = []
+    chunks = user_info_chunkify(handles)
+    for handle_chunk in chunks:
+        while handle_chunk:
+            try:
+                cf_users = await user.info(handles=handle_chunk)
+
+                # Users could still have changed capitalization
+                for handle, cf_user in zip(handle_chunk, cf_users):
+                    assert handle.lower() == cf_user.handle.lower()
+                    if handle != cf_user.handle:
+                        to_fix.append(handle)
+                break
+            except HandleNotFoundError as e:
+                to_fix.append(e.handle)
+                handle_chunk.remove(e.handle)
+    return to_fix
+
+
+async def _resolve_redirect(handle):
     url = 'http://codeforces.com/profile/' + handle
     async with _session.head(url) as r:
         if r.status == 200:
@@ -412,4 +449,24 @@ async def resolve_redirect(handle):
                 # Ended up not on profile page, probably invalid handle
                 return None
             return redirected.split('/profile/')[-1]
-        raise CodeforcesApiError(f'Something went wrong trying to redirect {url}')
+        raise CodeforcesApiError(
+            f'Something went wrong trying to redirect {url}')
+
+
+async def _resolve_handle_mapping(handles_to_fix):
+    redirections = {}
+    failed = []
+    for handle in handles_to_fix:
+        new_handle = await _resolve_redirect(handle)
+        if not new_handle:
+            redirections[handle] = None
+        else:
+            cf_user, = await user.info(handles=[new_handle])
+            redirections[handle] = cf_user
+    return redirections
+
+
+async def resolve_redirects(handles):
+    handles_to_fix = await _needs_fixing(handles)
+    handle_mapping = await _resolve_handle_mapping(handles_to_fix)
+    return handle_mapping

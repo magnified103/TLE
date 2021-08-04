@@ -16,6 +16,7 @@ import discord
 import random
 from discord.ext import commands
 
+from tle import constants
 from tle.util import cache_system2
 from tle.util import codeforces_api as cf
 from tle.util import codeforces_common as cf_common
@@ -220,7 +221,7 @@ def _make_profile_embed(member, user, *, mode):
         embed = discord.Embed(description=desc, color=user.rank.color_embed)
         embed.add_field(name='Rating', value=user.rating, inline=True)
         embed.add_field(name='Rank', value=user.rank.title, inline=True)
-    embed.set_thumbnail(url=f'https:{user.titlePhoto}')
+    embed.set_thumbnail(url=f'{user.titlePhoto}')
     return embed
 
 
@@ -288,7 +289,7 @@ class Handles(commands.Cog):
         cf_common.user_db.set_inactive([(member.guild.id, member.id)])
 
     @commands.command(brief='update status, mark guild members as active')
-    @commands.has_role('Admin')
+    @commands.has_role(constants.TLE_ADMIN)
     async def _updatestatus(self, ctx):
         gid = ctx.guild.id
         active_ids = [m.id for m in ctx.guild.members]
@@ -360,7 +361,7 @@ class Handles(commands.Cog):
             await member.add_roles(role_to_assign, reason=reason)
 
     @handle.command(brief='Set Codeforces handle of a user')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def set(self, ctx, member: discord.Member, handle: str):
         """Set Codeforces handle of a user."""
         # CF API returns correct handle ignoring case, update to it
@@ -443,7 +444,7 @@ class Handles(commands.Cog):
         await ctx.send(embed=embed)
 
     @handle.command(brief='Remove handle for a user')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def remove(self, ctx, member: discord.Member):
         """Remove Codeforces handle of a user."""
         rc = cf_common.user_db.remove_handle(member.id, ctx.guild.id)
@@ -460,62 +461,39 @@ class Handles(commands.Cog):
         (typically new year's magic)"""
         member = ctx.author
         handle = cf_common.user_db.get_handle(member.id, ctx.guild.id)
-        to_fix = await self._needs_fixing(ctx, [(member.id, handle)])
-
-        summary_embed = await self._fix(ctx, to_fix)
-        await ctx.send(embed=summary_embed)
+        await self._unmagic_handles(ctx, [handle], {handle: member})
 
     @handle.command(brief='Resolve handles needing redirection')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def unmagic_all(self, ctx):
         """Updates handles of all users that have changed handles
         (typically new year's magic)"""
-        to_fix = await self._needs_fixing(
-            ctx, cf_common.user_db.get_handles_for_guild(ctx.guild.id))
+        user_id_and_handles = cf_common.user_db.get_handles_for_guild(ctx.guild.id)
 
-        embed = discord_common.embed_neutral(f'Users to fix: {len(to_fix)}')
-        await ctx.send(embed=embed)
-
-        summary_embed = await self._fix(ctx, to_fix)
-        await ctx.send(embed=summary_embed)
-
-    async def _needs_fixing(self, ctx, user_id_and_handles):
         handles = []
         rev_lookup = {}
         for user_id, handle in user_id_and_handles:
             member = ctx.guild.get_member(user_id)
             handles.append(handle)
             rev_lookup[handle] = member
+        await self._unmagic_handles(ctx, handles, rev_lookup)
 
-        to_fix = []
-        chunks = paginator.chunkify(handles, cf.MAX_HANDLES_PER_QUERY)
-        for handle_chunk in chunks:
-            while handle_chunk:
-                try:
-                    users = await cf.user.info(handles=handle_chunk)
+    async def _unmagic_handles(self, ctx, handles, rev_lookup):
+        handle_cf_user_mapping = await cf.resolve_redirects(handles)
+        mapping = {(rev_lookup[handle], handle): cf_user
+                   for handle, cf_user in handle_cf_user_mapping.items()}
+        summary_embed = await self._fix_and_report(ctx, mapping)
+        await ctx.send(embed=summary_embed)
 
-                    # Users could still have changed capitalization
-                    for handle, user in zip(handle_chunk, users):
-                        assert handle.lower() == user.handle.lower()
-                        if handle != user.handle:
-                            to_fix.append((rev_lookup[handle], handle))
-                    break
-                except cf.HandleNotFoundError as e:
-                    to_fix.append((rev_lookup[e.handle], e.handle))
-                    handle_chunk.remove(e.handle)
-        return to_fix
-
-    async def _fix(self, ctx, to_fix):
+    async def _fix_and_report(self, ctx, redirections):
         fixed = []
         failed = []
-        for member, handle in to_fix:
-            new_handle = await cf.resolve_redirect(handle)
-            if not new_handle:
+        for (member, handle), cf_user in redirections.items():
+            if not cf_user:
                 failed.append(handle)
             else:
-                user, = await cf.user.info(handles=[new_handle])
-                await self._set(ctx, member, user)
-                fixed.append((handle, user.handle))
+                await self._set(ctx, member, cf_user)
+                fixed.append((handle, cf_user.handle))
 
         # Return summary embed
         lines = []
@@ -741,7 +719,7 @@ class Handles(commands.Cog):
         await ctx.send_help(ctx.command)
 
     @roleupdate.command(brief='Update Codeforces rank roles')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def now(self, ctx):
         """Updates Codeforces rank roles for every member in this server."""
         await self._update_ranks_all(ctx.guild)
@@ -749,7 +727,7 @@ class Handles(commands.Cog):
 
     @roleupdate.command(brief='Enable or disable auto role updates',
                         usage='on|off')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def auto(self, ctx, arg):
         """Auto role update refers to automatic updating of rank roles when rating
         changes are released on Codeforces. 'on'/'off' disables or enables auto role
@@ -770,7 +748,7 @@ class Handles(commands.Cog):
 
     @roleupdate.command(brief='Publish a rank update for the given contest',
                         usage='here|off|contest_id')
-    @commands.has_any_role('Admin', 'Moderator')
+    @commands.has_any_role(constants.TLE_ADMIN, constants.TLE_MODERATOR)
     async def publish(self, ctx, arg):
         """This is a feature to publish a summary of rank changes and top rating
         increases in a particular contest for members of this server. 'here' will
