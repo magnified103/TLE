@@ -256,15 +256,14 @@ def _make_pages_gudgitters(users, title):
     style = table.Style('{:>}  {:<}  {:<}  {:<}')
     for chunk in chunks:
         t = table.Table(style)
-        t += table.Header('#', 'Name', 'Handle', 'Rating')
+        t += table.Header('#', 'Name', 'Handle', 'Points')
         t += table.Line()
-        for i, (member, handle, rating) in enumerate(chunk):
-            name = member
+        for (index, member, handle, rating, points) in chunk:
+            rating_str = 'N/A' if rating is None else str(rating)
+            name = f'{member} ({rating_str})'
             if len(name) > _NAME_MAX_LEN:
                 name = name[:_NAME_MAX_LEN - 1] + '…'
-            rank = cf.rating2rank(rating)
-            rating_str = 'N/A' if rating is None else str(rating)
-            t += table.Data(i + done, name, handle, f'{rating_str}')
+            t += table.Data(index + 1, name, handle, points)
         table_str = '```\n'+str(t)+'\n```'
         embed = discord_common.cf_color_embed(description=table_str)
         pages.append((title, embed))
@@ -514,6 +513,7 @@ class Handles(commands.Cog):
         res.sort(key=lambda r: r[1], reverse=True)
 
         rankings = []
+        index = 0
         for user_id, score in res:
             member = ctx.guild.get_member(int(user_id))
             if member is None:
