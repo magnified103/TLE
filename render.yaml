@@ -1,0 +1,10 @@
+services:
+  # A Docker web service
+  - type: web
+    name: TLE
+    env: docker
+    repo: https://github.com/magnified103/TLE.git # optional
+    region: oregon # optional (defaults to oregon)
+    branch: render # optional (defaults to master)
+    healthCheckPath: /
+
